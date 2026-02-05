@@ -3,7 +3,7 @@ import { LoginPage } from '../pages/LoginPage';
 
 test.describe('Login', () => {
 
-  test('@dev login works', async ({ page }) => {
+  test('@dev @qa @app login works', async ({ page }) => {
     const env = process.env.TARGET_ENV || 'dev';
     const loginPage = new LoginPage(page);
 
