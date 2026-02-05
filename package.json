@@ -1,0 +1,40 @@
+{
+  "name": "prueba-tatiana",
+  "version": "1.0.0",
+  "description": "Playwright E2E automation with TypeScript",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "install:browsers": "npx playwright install",
+    "install:deps": "npx playwright install-deps",
+    "setup": "npm install && npm run install:browsers && npm run install:deps",
+    "test": "npx playwright test",
+    "test:dev": "cross-env TARGET_ENV=dev npx playwright test --grep @dev",
+    "test:qa": "cross-env TARGET_ENV=qa npx playwright test --grep @qa",
+    "test:app": "cross-env TARGET_ENV=app npx playwright test --grep @app",
+    "test:headed": "npx playwright test --headed",
+    "test:debug": "npx playwright test --debug",
+    "report": "npx playwright show-report"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tatiana-mayorga0905/Prueba-Tatiana.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/tatiana-mayorga0905/Prueba-Tatiana/issues"
+  },
+  "homepage": "https://github.com/tatiana-mayorga0905/Prueba-Tatiana#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.58.1",
+    "@types/dotenv": "^6.1.1",
+    "@types/node": "^25.2.1",
+    "cross-env": "^10.1.0"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3"
+  }
+}
