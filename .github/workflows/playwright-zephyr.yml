@@ -29,7 +29,7 @@ jobs:
         with:
           node-version: 18
 
-      # 3️⃣ Deps
+      # 3️⃣ Dependencies
       - name: Install dependencies
         run: npm ci
 
@@ -41,16 +41,12 @@ jobs:
       - name: Run Playwright tests
         env:
           TARGET_ENV: ${{ matrix.env }}
-
           DEV_USER_EMAIL: ${{ secrets.DEV_USER_EMAIL }}
           DEV_USER_PASSWORD: ${{ secrets.DEV_USER_PASSWORD }}
-
           QA_USER_EMAIL: ${{ secrets.QA_USER_EMAIL }}
           QA_USER_PASSWORD: ${{ secrets.QA_USER_PASSWORD }}
-
           APP_USER_EMAIL: ${{ secrets.APP_USER_EMAIL }}
           APP_USER_PASSWORD: ${{ secrets.APP_USER_PASSWORD }}
-
         run: |
           echo "Running tests for ENV=${{ matrix.env }}"
           if [ "${{ matrix.env }}" = "dev" ]; then
@@ -70,44 +66,41 @@ jobs:
           path: playwright-report/
           retention-days: 30
 
-      # 7️⃣ DIAGNÓSTICO: Verificar todas las variables
+      # 7️⃣ DEBUG: Verificar variables
       - name: Debug - Check all variables
         if: always()
         run: |
           echo "🔍 ==========================================="
           echo "🔍 DEBUG: VERIFICANDO TODAS LAS VARIABLES"
           echo "🔍 ==========================================="
-          
-          # Variables del workflow
+
           echo "📌 MATRIX ENV: ${{ matrix.env }}"
           echo "📌 TARGET_ENV: $TARGET_ENV"
-          
-          # Variables de Jira/Zephyr (SENSIBLES - mostrar solo si existen)
+
           echo ""
           echo "🔐 JIRA/ZEPHYR VARIABLES:"
-          
+
           if [ -n "$JIRA_EMAIL" ]; then
             EMAIL_PREFIX=$(echo "$JIRA_EMAIL" | cut -c1-3)
             echo "✅ JIRA_EMAIL: ${EMAIL_PREFIX}... (seteado, longitud: ${#JIRA_EMAIL})"
           else
             echo "❌ JIRA_EMAIL: NO SETEADO"
           fi
-          
+
           if [ -n "$JIRA_API_TOKEN" ]; then
             echo "✅ JIRA_API_TOKEN: SETEADO (longitud: ${#JIRA_API_TOKEN})"
           else
             echo "❌ JIRA_API_TOKEN: NO SETEADO"
           fi
-          
+
           if [ -n "$JIRA_BASE_URL" ]; then
             echo "✅ JIRA_BASE_URL: $JIRA_BASE_URL"
           else
             echo "❌ JIRA_BASE_URL: NO SETEADO"
           fi
-          
+
           if [ -n "$JIRA_PROJECT_KEY" ]; then
             echo "✅ PROJECT_KEY: '$JIRA_PROJECT_KEY' (longitud: ${#JIRA_PROJECT_KEY})"
-            
             if [[ "$JIRA_PROJECT_KEY" =~ ^[A-Z]+$ ]]; then
               echo "   ✓ Formato válido: solo letras mayúsculas"
             else
@@ -116,12 +109,10 @@ jobs:
           else
             echo "❌❌❌ PROJECT_KEY: NO SETEADO - ESTE ES EL PROBLEMA PROBABLE"
           fi
-          
+
           echo ""
-          echo "📁 VERIFICANDO ARCHIVOS DE RESULTADOS:"
+          echo "📁 ARCHIVOS DE RESULTADOS:"
           ls -la test-results/ || echo "No hay directorio test-results"
-          
-          echo ""
           echo "🔍 ==========================================="
         env:
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
@@ -129,27 +120,32 @@ jobs:
           JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
           JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
 
-      # 8️⃣ Upload results to Zephyr (Jira)
+      # 8️⃣ Upload results to Zephyr Scale Cloud
       - name: Upload results to Zephyr Scale
         if: always()
         continue-on-error: true
         run: |
-          echo "🚀 Subiendo resultados a Zephyr Scale..."
-          
+          echo "🚀 Subiendo resultados a Zephyr Scale Cloud..."
+
           if [ -z "$JIRA_PROJECT_KEY" ]; then
             echo "❌ ERROR: JIRA_PROJECT_KEY no está definido"
             exit 1
           fi
-          
+
           if [ ! -f "test-results/junit.xml" ]; then
             echo "⚠️ junit.xml no encontrado"
             ls -la test-results/ || true
             exit 1
           fi
-          
+
           TIMESTAMP=$(date +'%Y-%m-%d %H:%M')
           TEST_CYCLE_NAME="Playwright Tests - ${{ matrix.env }} - $TIMESTAMP"
-          
+
+          # Endpoint correcto Cloud
+          ZEPHYR_ENDPOINT="$JIRA_BASE_URL/rest/atm/1.0/testrun/import"
+          echo "🌐 Endpoint usado: $ZEPHYR_ENDPOINT"
+
+          # Subir JUnit
           response_code=$(curl -s -w "\n%{http_code}" -o /tmp/zephyr_response.json \
             -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
             -H "Content-Type: multipart/form-data" \
@@ -157,31 +153,31 @@ jobs:
             -F "projectKey=$JIRA_PROJECT_KEY" \
             -F "testCycle=$TEST_CYCLE_NAME" \
             -F "autoCreateTestCases=true" \
-            "$JIRA_BASE_URL/rest/atm/1.0/testrun/import")
-          
+            "$ZEPHYR_ENDPOINT")
+
           http_code=$(echo "$response_code" | tail -n1)
           echo "📨 Código HTTP: $http_code"
-          
+
           if [ -f "/tmp/zephyr_response.json" ]; then
             echo "📄 Respuesta de la API:"
             cat /tmp/zephyr_response.json
           fi
-          
+
           case $http_code in
             200|201)
-              echo "✅ ÉXITO! Resultados subidos a Zephyr Scale"
+              echo "✅ ÉXITO! Resultados subidos a Zephyr Scale Cloud"
               ;;
             400)
-              echo "❌ Bad Request (400)"
+              echo "❌ Bad Request (400) - revisa JUnit y Project Key"
               ;;
             401)
-              echo "❌ Unauthorized (401)"
+              echo "❌ Unauthorized (401) - revisa email y API token"
               ;;
             403)
-              echo "❌ Forbidden (403)"
+              echo "❌ Forbidden (403) - revisa permisos en el proyecto '$JIRA_PROJECT_KEY'"
               ;;
             404)
-              echo "❌ Not Found (404) - revisa URL y que Zephyr Scale esté instalado"
+              echo "❌ Not Found (404) - endpoint incorrecto o Zephyr Scale no instalado"
               ;;
             *)
               echo "❌ Error desconocido (HTTP $http_code)"
