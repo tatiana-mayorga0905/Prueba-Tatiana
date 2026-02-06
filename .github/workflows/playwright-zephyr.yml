@@ -75,7 +75,13 @@ jobs:
         if: always()
         run: |
           echo "Uploading results to Zephyr for ENV=${{ matrix.env }}"
-          curl -X POST \
+          echo "EMAIL set? -> ${JIRA_EMAIL:+YES}"
+          echo "TOKEN set? -> ${JIRA_API_TOKEN:+YES}"
+          echo "BASE_URL set? -> ${JIRA_BASE_URL:+YES}"
+
+          ls -l test-results
+
+          curl -v -X POST \
             -u $JIRA_EMAIL:$JIRA_API_TOKEN \
             -H "Content-Type: multipart/form-data" \
             -F "file=@test-results/junit.xml" \
