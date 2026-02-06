@@ -1,4 +1,4 @@
-name: Playwright + Zephyr (Unified)
+name: Playwright + Zephyr (Legacy)
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
 
 jobs:
   test:
-    timeout-minutes: 60
+    timeout-minutes: 90
     runs-on: ubuntu-latest
 
     strategy:
@@ -19,38 +19,34 @@ jobs:
         env: [dev, qa, app]
 
     steps:
-      # 1️⃣ Checkout
+      # 1️⃣ Checkout del repo
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      # 2️⃣ Node
+      # 2️⃣ Setup Node.js
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      # 3️⃣ Deps
+      # 3️⃣ Instalar dependencias
       - name: Install dependencies
         run: npm ci
 
-      # 4️⃣ Playwright browsers
+      # 4️⃣ Instalar navegadores Playwright
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
 
-      # 5️⃣ Run tests (según env)
+      # 5️⃣ Ejecutar tests según el environment
       - name: Run Playwright tests
         env:
           TARGET_ENV: ${{ matrix.env }}
-
           DEV_USER_EMAIL: ${{ secrets.DEV_USER_EMAIL }}
           DEV_USER_PASSWORD: ${{ secrets.DEV_USER_PASSWORD }}
-
           QA_USER_EMAIL: ${{ secrets.QA_USER_EMAIL }}
           QA_USER_PASSWORD: ${{ secrets.QA_USER_PASSWORD }}
-
           APP_USER_EMAIL: ${{ secrets.APP_USER_EMAIL }}
           APP_USER_PASSWORD: ${{ secrets.APP_USER_PASSWORD }}
-
         run: |
           echo "Running tests for ENV=${{ matrix.env }}"
           if [ "${{ matrix.env }}" = "dev" ]; then
@@ -61,95 +57,37 @@ jobs:
             npm run test:app
           fi
 
-      # 6️⃣ Upload Playwright HTML report
-      - name: Upload Playwright Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report-${{ matrix.env }}
-          path: playwright-report/
-          retention-days: 30
-
-      # 7️⃣ Debug variables
-      - name: Debug - Check all variables
-        if: always()
+      # 6️⃣ Convertir results.json a Zephyr JSON
+      - name: Convert results.json to Zephyr JSON
         run: |
-          echo "🔍 DEBUG VARIABLES"
-          echo "MATRIX ENV: ${{ matrix.env }}"
-          echo "TARGET_ENV: $TARGET_ENV"
-          echo "JIRA_PROJECT_KEY: $JIRA_PROJECT_KEY"
-          echo "JIRA_BASE_URL: $JIRA_BASE_URL"
-        env:
-          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
-          JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
+          npx ts-node scripts/convert-to-zephyr.ts
+        # No necesitas NODE_OPTIONS si tu script es CommonJS
 
-      # 8️⃣ Verificación previa de Zephyr Scale Cloud
-      - name: Check Zephyr Scale endpoint
-        if: always()
-        run: |
-          echo "🌐 Verificando acceso a Zephyr Scale Cloud..."
-
-          ZEHPYR_ENDPOINT="$JIRA_BASE_URL/rest/atm/1.0/testrun/import"
-
-          echo "🔗 Endpoint usado: $ZEHPYR_ENDPOINT"
-
-          # Prueba GET simple para verificar si responde
-          response=$(curl -s -o /tmp/zephyr_check.json -w "%{http_code}" \
-            -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
-            -X GET "$ZEHPYR_ENDPOINT")
-
-          echo "📨 Código HTTP: $response"
-
-          if [ "$response" -eq 200 ] || [ "$response" -eq 405 ]; then
-            # 405 = Method Not Allowed, significa que el endpoint existe
-            echo "✅ El endpoint existe y es accesible"
-          elif [ "$response" -eq 401 ]; then
-            echo "❌ Unauthorized (401) - revisa JIRA_EMAIL y JIRA_API_TOKEN"
-            exit 1
-          elif [ "$response" -eq 403 ]; then
-            echo "❌ Forbidden (403) - revisa permisos en el proyecto $JIRA_PROJECT_KEY"
-            exit 1
-          elif [ "$response" -eq 404 ]; then
-            echo "❌ Not Found (404) - Zephyr Scale podría no estar instalado o URL incorrecta"
-            exit 1
-          else
-            echo "❌ Código HTTP inesperado: $response"
-            exit 1
-          fi
-        env:
-          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
-          JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
-
-      # 9️⃣ Upload results to Zephyr Scale
-      - name: Upload results to Zephyr Scale
+      # 7️⃣ Subir resultados a Zephyr Legacy
+      - name: Upload results to Zephyr Legacy
         if: always()
         continue-on-error: true
+        env:
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
         run: |
-          echo "🚀 Subiendo resultados a Zephyr Scale..."
+          echo "🚀 Subiendo resultados a Zephyr Legacy..."
+          ZEPHYR_ENDPOINT="$JIRA_BASE_URL/rest/zapi/latest/execution"
 
-          if [ ! -f "test-results/junit.xml" ]; then
-            echo "⚠️ junit.xml no encontrado"
-            ls -la test-results/ || true
+          if [ ! -f "test-results/zephyr.json" ]; then
+            echo "⚠️ zephyr.json no encontrado"
+            ls -la test-results/
             exit 1
           fi
-
-          TIMESTAMP=$(date +'%Y-%m-%d %H:%M')
-          TEST_CYCLE_NAME="Playwright Tests - ${{ matrix.env }} - $TIMESTAMP"
-
-          ZEHPYR_ENDPOINT="$JIRA_BASE_URL/rest/atm/1.0/testrun/import"
 
           response_code=$(curl -s -w "\n%{http_code}" -o /tmp/zephyr_response.json \
             -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
-            -H "Content-Type: multipart/form-data" \
-            -F "file=@test-results/junit.xml" \
-            -F "projectKey=$JIRA_PROJECT_KEY" \
-            -F "testCycle=$TEST_CYCLE_NAME" \
-            -F "autoCreateTestCases=true" \
-            "$ZEHPYR_ENDPOINT")
+            -H "Content-Type: application/json" \
+            -X POST \
+            -d @test-results/zephyr.json \
+            "$ZEPHYR_ENDPOINT")
 
           http_code=$(echo "$response_code" | tail -n1)
           echo "📨 Código HTTP: $http_code"
@@ -160,27 +98,19 @@ jobs:
           fi
 
           case $http_code in
-            200|201)
-              echo "✅ ÉXITO! Resultados subidos a Zephyr Scale"
-              ;;
-            400)
-              echo "❌ Bad Request (400)"
-              ;;
-            401)
-              echo "❌ Unauthorized (401)"
-              ;;
-            403)
-              echo "❌ Forbidden (403)"
-              ;;
-            404)
-              echo "❌ Not Found (404) - revisa URL y que Zephyr Scale esté instalado"
-              ;;
-            *)
-              echo "❌ Error desconocido (HTTP $http_code)"
-              ;;
+            200|201) echo "✅ ÉXITO! Resultados subidos a Zephyr Legacy";;
+            400) echo "❌ Bad Request (400)";;
+            401) echo "❌ Unauthorized (401)";;
+            403) echo "❌ Forbidden (403)";;
+            404) echo "❌ Not Found (404)";;
+            *) echo "❌ Error desconocido (HTTP $http_code)";;
           esac
-        env:
-          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
-          JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
+
+      # 8️⃣ Subir reporte HTML de Playwright
+      - name: Upload Playwright Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.env }}
+          path: playwright-report/
+          retention-days: 30
