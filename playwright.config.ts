@@ -10,6 +10,11 @@ const envConfig = environments[ENV as keyof typeof environments];
 export default defineConfig({
   testDir: "./tests",
 
+  timeout: 30_000, 
+  expect: {
+    timeout: 5_000,
+  },
+
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -17,6 +22,7 @@ export default defineConfig({
   reporter: [
     ["list"],
     ["html", { open: "never" }],
+    ["json", { outputFile: "test-results/results.json" }],
   ],
 
   use: {
