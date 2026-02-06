@@ -9,7 +9,7 @@ test.describe('Login', () => {
 
     await page.goto('/');
     await loginPage.login(env);
-
+    console.log('URL actual:', page.url());
     // Ajusta este assert a tu app real
     await expect(page).not.toHaveURL(/login/);
   });
