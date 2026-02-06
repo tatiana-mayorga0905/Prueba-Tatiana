@@ -14,6 +14,8 @@
     "test:app": "cross-env TARGET_ENV=app npx playwright test --grep @app",
     "test:headed": "npx playwright test --headed",
     "test:debug": "npx playwright test --debug",
+    "convert:zephyr": "ts-node scripts/convert-to-zephyr.ts",
+    "zephyr:convert": "ts-node scripts/zephyr-convert.ts",
     "report": "npx playwright show-report"
   },
   "repository": {
@@ -32,7 +34,9 @@
     "@playwright/test": "^1.58.1",
     "@types/dotenv": "^6.1.1",
     "@types/node": "^25.2.1",
-    "cross-env": "^10.1.0"
+    "cross-env": "^10.1.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "dotenv": "^17.2.3"
