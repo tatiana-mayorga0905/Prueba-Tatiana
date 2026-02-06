@@ -1,47 +1,85 @@
-name: Playwright + Zephyr
+name: Playwright + Zephyr (Unified)
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  schedule:
+    - cron: '0 9 * * *'   # diario 9am UTC
   workflow_dispatch:
 
 jobs:
   test:
+    timeout-minutes: 60
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        env: [dev, qa, app]
+
     steps:
+      # 1️⃣ Checkout
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      # 2️⃣ Node
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
+      # 3️⃣ Deps
       - name: Install dependencies
         run: npm ci
 
+      # 4️⃣ Playwright browsers
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
 
+      # 5️⃣ Run tests (según env)
       - name: Run Playwright tests
-        run: npx playwright test
         env:
-          TARGET_ENV: dev
+          TARGET_ENV: ${{ matrix.env }}
 
+          DEV_USER_EMAIL: ${{ secrets.DEV_USER_EMAIL }}
+          DEV_USER_PASSWORD: ${{ secrets.DEV_USER_PASSWORD }}
+
+          QA_USER_EMAIL: ${{ secrets.QA_USER_EMAIL }}
+          QA_USER_PASSWORD: ${{ secrets.QA_USER_PASSWORD }}
+
+          APP_USER_EMAIL: ${{ secrets.APP_USER_EMAIL }}
+          APP_USER_PASSWORD: ${{ secrets.APP_USER_PASSWORD }}
+
+        run: |
+          echo "Running tests for ENV=${{ matrix.env }}"
+          if [ "${{ matrix.env }}" = "dev" ]; then
+            npm run test:dev
+          elif [ "${{ matrix.env }}" = "qa" ]; then
+            npm run test:qa
+          else
+            npm run test:app
+          fi
+
+      # 6️⃣ Upload Playwright HTML report
       - name: Upload Playwright Report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
-          path: playwright-report
+          name: playwright-report-${{ matrix.env }}
+          path: playwright-report/
+          retention-days: 30
 
+      # 7️⃣ Upload results to Zephyr (Jira)
       - name: Upload results to Zephyr
+        if: always()
         run: |
+          echo "Uploading results to Zephyr for ENV=${{ matrix.env }}"
           curl -X POST \
-          -u $JIRA_EMAIL:$JIRA_API_TOKEN \
-          -H "Content-Type: multipart/form-data" \
-          -F "file=@test-results/results.json" \
-          $JIRA_BASE_URL/rest/zephyr/latest/import/execution
+            -u $JIRA_EMAIL:$JIRA_API_TOKEN \
+            -H "Content-Type: multipart/form-data" \
+            -F "file=@test-results/results.json" \
+            "$JIRA_BASE_URL/rest/zephyr/latest/import/execution"
         env:
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
