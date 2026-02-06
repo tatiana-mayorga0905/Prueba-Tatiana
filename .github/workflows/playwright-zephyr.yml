@@ -29,7 +29,7 @@ jobs:
         with:
           node-version: 18
 
-      # 3️⃣ Dependencies
+      # 3️⃣ Deps
       - name: Install dependencies
         run: npm ci
 
@@ -41,12 +41,16 @@ jobs:
       - name: Run Playwright tests
         env:
           TARGET_ENV: ${{ matrix.env }}
+
           DEV_USER_EMAIL: ${{ secrets.DEV_USER_EMAIL }}
           DEV_USER_PASSWORD: ${{ secrets.DEV_USER_PASSWORD }}
+
           QA_USER_EMAIL: ${{ secrets.QA_USER_EMAIL }}
           QA_USER_PASSWORD: ${{ secrets.QA_USER_PASSWORD }}
+
           APP_USER_EMAIL: ${{ secrets.APP_USER_EMAIL }}
           APP_USER_PASSWORD: ${{ secrets.APP_USER_PASSWORD }}
+
         run: |
           echo "Running tests for ENV=${{ matrix.env }}"
           if [ "${{ matrix.env }}" = "dev" ]; then
@@ -66,71 +70,66 @@ jobs:
           path: playwright-report/
           retention-days: 30
 
-      # 7️⃣ DEBUG: Verificar variables
+      # 7️⃣ Debug variables
       - name: Debug - Check all variables
         if: always()
         run: |
-          echo "🔍 ==========================================="
-          echo "🔍 DEBUG: VERIFICANDO TODAS LAS VARIABLES"
-          echo "🔍 ==========================================="
-
-          echo "📌 MATRIX ENV: ${{ matrix.env }}"
-          echo "📌 TARGET_ENV: $TARGET_ENV"
-
-          echo ""
-          echo "🔐 JIRA/ZEPHYR VARIABLES:"
-
-          if [ -n "$JIRA_EMAIL" ]; then
-            EMAIL_PREFIX=$(echo "$JIRA_EMAIL" | cut -c1-3)
-            echo "✅ JIRA_EMAIL: ${EMAIL_PREFIX}... (seteado, longitud: ${#JIRA_EMAIL})"
-          else
-            echo "❌ JIRA_EMAIL: NO SETEADO"
-          fi
-
-          if [ -n "$JIRA_API_TOKEN" ]; then
-            echo "✅ JIRA_API_TOKEN: SETEADO (longitud: ${#JIRA_API_TOKEN})"
-          else
-            echo "❌ JIRA_API_TOKEN: NO SETEADO"
-          fi
-
-          if [ -n "$JIRA_BASE_URL" ]; then
-            echo "✅ JIRA_BASE_URL: $JIRA_BASE_URL"
-          else
-            echo "❌ JIRA_BASE_URL: NO SETEADO"
-          fi
-
-          if [ -n "$JIRA_PROJECT_KEY" ]; then
-            echo "✅ PROJECT_KEY: '$JIRA_PROJECT_KEY' (longitud: ${#JIRA_PROJECT_KEY})"
-            if [[ "$JIRA_PROJECT_KEY" =~ ^[A-Z]+$ ]]; then
-              echo "   ✓ Formato válido: solo letras mayúsculas"
-            else
-              echo "   ⚠️  Formato inusual: '$JIRA_PROJECT_KEY'"
-            fi
-          else
-            echo "❌❌❌ PROJECT_KEY: NO SETEADO - ESTE ES EL PROBLEMA PROBABLE"
-          fi
-
-          echo ""
-          echo "📁 ARCHIVOS DE RESULTADOS:"
-          ls -la test-results/ || echo "No hay directorio test-results"
-          echo "🔍 ==========================================="
+          echo "🔍 DEBUG VARIABLES"
+          echo "MATRIX ENV: ${{ matrix.env }}"
+          echo "TARGET_ENV: $TARGET_ENV"
+          echo "JIRA_PROJECT_KEY: $JIRA_PROJECT_KEY"
+          echo "JIRA_BASE_URL: $JIRA_BASE_URL"
         env:
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
           JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
           JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
 
-      # 8️⃣ Upload results to Zephyr Scale Cloud
+      # 8️⃣ Verificación previa de Zephyr Scale Cloud
+      - name: Check Zephyr Scale endpoint
+        if: always()
+        run: |
+          echo "🌐 Verificando acceso a Zephyr Scale Cloud..."
+
+          ZEHPYR_ENDPOINT="$JIRA_BASE_URL/rest/atm/1.0/testrun/import"
+
+          echo "🔗 Endpoint usado: $ZEHPYR_ENDPOINT"
+
+          # Prueba GET simple para verificar si responde
+          response=$(curl -s -o /tmp/zephyr_check.json -w "%{http_code}" \
+            -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+            -X GET "$ZEHPYR_ENDPOINT")
+
+          echo "📨 Código HTTP: $response"
+
+          if [ "$response" -eq 200 ] || [ "$response" -eq 405 ]; then
+            # 405 = Method Not Allowed, significa que el endpoint existe
+            echo "✅ El endpoint existe y es accesible"
+          elif [ "$response" -eq 401 ]; then
+            echo "❌ Unauthorized (401) - revisa JIRA_EMAIL y JIRA_API_TOKEN"
+            exit 1
+          elif [ "$response" -eq 403 ]; then
+            echo "❌ Forbidden (403) - revisa permisos en el proyecto $JIRA_PROJECT_KEY"
+            exit 1
+          elif [ "$response" -eq 404 ]; then
+            echo "❌ Not Found (404) - Zephyr Scale podría no estar instalado o URL incorrecta"
+            exit 1
+          else
+            echo "❌ Código HTTP inesperado: $response"
+            exit 1
+          fi
+        env:
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
+
+      # 9️⃣ Upload results to Zephyr Scale
       - name: Upload results to Zephyr Scale
         if: always()
         continue-on-error: true
         run: |
-          echo "🚀 Subiendo resultados a Zephyr Scale Cloud..."
-
-          if [ -z "$JIRA_PROJECT_KEY" ]; then
-            echo "❌ ERROR: JIRA_PROJECT_KEY no está definido"
-            exit 1
-          fi
+          echo "🚀 Subiendo resultados a Zephyr Scale..."
 
           if [ ! -f "test-results/junit.xml" ]; then
             echo "⚠️ junit.xml no encontrado"
@@ -141,11 +140,8 @@ jobs:
           TIMESTAMP=$(date +'%Y-%m-%d %H:%M')
           TEST_CYCLE_NAME="Playwright Tests - ${{ matrix.env }} - $TIMESTAMP"
 
-          # Endpoint correcto Cloud
-          ZEPHYR_ENDPOINT="$JIRA_BASE_URL/rest/atm/1.0/testrun/import"
-          echo "🌐 Endpoint usado: $ZEPHYR_ENDPOINT"
+          ZEHPYR_ENDPOINT="$JIRA_BASE_URL/rest/atm/1.0/testrun/import"
 
-          # Subir JUnit
           response_code=$(curl -s -w "\n%{http_code}" -o /tmp/zephyr_response.json \
             -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
             -H "Content-Type: multipart/form-data" \
@@ -153,7 +149,7 @@ jobs:
             -F "projectKey=$JIRA_PROJECT_KEY" \
             -F "testCycle=$TEST_CYCLE_NAME" \
             -F "autoCreateTestCases=true" \
-            "$ZEPHYR_ENDPOINT")
+            "$ZEHPYR_ENDPOINT")
 
           http_code=$(echo "$response_code" | tail -n1)
           echo "📨 Código HTTP: $http_code"
@@ -165,19 +161,19 @@ jobs:
 
           case $http_code in
             200|201)
-              echo "✅ ÉXITO! Resultados subidos a Zephyr Scale Cloud"
+              echo "✅ ÉXITO! Resultados subidos a Zephyr Scale"
               ;;
             400)
-              echo "❌ Bad Request (400) - revisa JUnit y Project Key"
+              echo "❌ Bad Request (400)"
               ;;
             401)
-              echo "❌ Unauthorized (401) - revisa email y API token"
+              echo "❌ Unauthorized (401)"
               ;;
             403)
-              echo "❌ Forbidden (403) - revisa permisos en el proyecto '$JIRA_PROJECT_KEY'"
+              echo "❌ Forbidden (403)"
               ;;
             404)
-              echo "❌ Not Found (404) - endpoint incorrecto o Zephyr Scale no instalado"
+              echo "❌ Not Found (404) - revisa URL y que Zephyr Scale esté instalado"
               ;;
             *)
               echo "❌ Error desconocido (HTTP $http_code)"
