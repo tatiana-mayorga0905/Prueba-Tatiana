@@ -74,7 +74,7 @@ jobs:
           JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
         run: |
           echo "🚀 Subiendo resultados a Zephyr Legacy..."
-          ZEPHYR_ENDPOINT="$JIRA_BASE_URL/rest/zapi/latest/execution"
+          ZEPHYR_ENDPOINT="https://api.zephyrscale.smartbear.com/v2/testexecutions"
 
           if [ ! -f "test-results/zephyr.json" ]; then
             echo "⚠️ zephyr.json no encontrado"
