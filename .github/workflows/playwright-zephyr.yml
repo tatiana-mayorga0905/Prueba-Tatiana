@@ -85,7 +85,7 @@ jobs:
             -u $JIRA_EMAIL:$JIRA_API_TOKEN \
             -H "Content-Type: multipart/form-data" \
             -F "file=@test-results/junit.xml" \
-            "$JIRA_BASE_URL/public/rest/api/1.0/executions/import"
+            "$JIRA_BASE_URL/rest/atm/1.0/testrun/import"
         env:
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
