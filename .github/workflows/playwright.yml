@@ -1,0 +1,61 @@
+name: Playwright Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  schedule:
+    - cron: '0 9 * * *'   # diario 9am UTC
+  workflow_dispatch:
+
+jobs:
+  test:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        env: [dev, qa, app]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
+
+      - name: Run Playwright tests
+        env:
+          TARGET_ENV: ${{ matrix.env }}
+
+          DEV_USER_EMAIL: ${{ secrets.DEV_USER_EMAIL }}
+          DEV_USER_PASSWORD: ${{ secrets.DEV_USER_PASSWORD }}
+
+          QA_USER_EMAIL: ${{ secrets.QA_USER_EMAIL }}
+          QA_USER_PASSWORD: ${{ secrets.QA_USER_PASSWORD }}
+
+          APP_USER_EMAIL: ${{ secrets.APP_USER_EMAIL }}
+          APP_USER_PASSWORD: ${{ secrets.APP_USER_PASSWORD }}
+
+        run: |
+          if [ "${{ matrix.env }}" = "dev" ]; then
+            npm run test:dev
+          elif [ "${{ matrix.env }}" = "qa" ]; then
+            npm run test:qa
+          else
+            npm run test:app
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-${{ matrix.env }}
+          path: playwright-report/
+          retention-days: 30
