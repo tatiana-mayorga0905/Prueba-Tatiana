@@ -86,7 +86,6 @@ jobs:
           echo ""
           echo "🔐 JIRA/ZEPHYR VARIABLES:"
           
-          # JIRA_EMAIL (mostrar solo primeros caracteres por seguridad)
           if [ -n "$JIRA_EMAIL" ]; then
             EMAIL_PREFIX=$(echo "$JIRA_EMAIL" | cut -c1-3)
             echo "✅ JIRA_EMAIL: ${EMAIL_PREFIX}... (seteado, longitud: ${#JIRA_EMAIL})"
@@ -94,34 +93,28 @@ jobs:
             echo "❌ JIRA_EMAIL: NO SETEADO"
           fi
           
-          # JIRA_API_TOKEN (solo indicar si existe)
           if [ -n "$JIRA_API_TOKEN" ]; then
             echo "✅ JIRA_API_TOKEN: SETEADO (longitud: ${#JIRA_API_TOKEN})"
           else
             echo "❌ JIRA_API_TOKEN: NO SETEADO"
           fi
           
-          # JIRA_BASE_URL
           if [ -n "$JIRA_BASE_URL" ]; then
             echo "✅ JIRA_BASE_URL: $JIRA_BASE_URL"
           else
             echo "❌ JIRA_BASE_URL: NO SETEADO"
           fi
           
-          # PROJECT_KEY - ¡LA MÁS IMPORTANTE!
-          if [ -n "$PROJECT_KEY" ]; then
-            echo "✅ PROJECT_KEY: '$PROJECT_KEY' (longitud: ${#PROJECT_KEY})"
+          if [ -n "$JIRA_PROJECT_KEY" ]; then
+            echo "✅ PROJECT_KEY: '$JIRA_PROJECT_KEY' (longitud: ${#JIRA_PROJECT_KEY})"
             
-            # Validar formato del Project Key
-            if [[ "$PROJECT_KEY" =~ ^[A-Z]+$ ]]; then
+            if [[ "$JIRA_PROJECT_KEY" =~ ^[A-Z]+$ ]]; then
               echo "   ✓ Formato válido: solo letras mayúsculas"
             else
-              echo "   ⚠️  Formato inusual: '$PROJECT_KEY'"
-              echo "   ℹ️  Los Project Keys suelen ser solo letras mayúsculas (ej: TEST, QA, PROJ)"
+              echo "   ⚠️  Formato inusual: '$JIRA_PROJECT_KEY'"
             fi
           else
             echo "❌❌❌ PROJECT_KEY: NO SETEADO - ESTE ES EL PROBLEMA PROBABLE"
-            echo "   ℹ️  Agrega 'PROJECT_KEY' en GitHub Secrets"
           fi
           
           echo ""
@@ -134,123 +127,68 @@ jobs:
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
           JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
-          PROJECT_KEY: ${{ secrets.PROJECT_KEY }}
+          JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
 
-      # 8️⃣ Upload results to Zephyr (Jira) - VERSIÓN CORREGIDA
+      # 8️⃣ Upload results to Zephyr (Jira)
       - name: Upload results to Zephyr Scale
         if: always()
         continue-on-error: true
         run: |
-          echo "🚀 ==========================================="
-          echo "📤 SUBIENDO RESULTADOS A ZEPHYR SCALE"
-          echo "🚀 ==========================================="
+          echo "🚀 Subiendo resultados a Zephyr Scale..."
           
-          # 1. Verificar que PROJECT_KEY esté definido
-          if [ -z "$PROJECT_KEY" ]; then
-            echo "❌❌❌ ERROR CRÍTICO: PROJECT_KEY no está definido"
-            echo "   ℹ️  Por favor, agrega 'PROJECT_KEY' en:"
-            echo "   GitHub → Settings → Secrets and variables → Actions"
-            echo "   Name: PROJECT_KEY"
-            echo "   Value: El key de tu proyecto en Jira (ej: PRUEB, TEST, etc.)"
-            exit 0
+          if [ -z "$JIRA_PROJECT_KEY" ]; then
+            echo "❌ ERROR: JIRA_PROJECT_KEY no está definido"
+            exit 1
           fi
           
-          # 2. Verificar que el archivo existe
           if [ ! -f "test-results/junit.xml" ]; then
-            echo "⚠️  Advertencia: junit.xml no encontrado"
-            echo "📁 Contenido de test-results/:"
+            echo "⚠️ junit.xml no encontrado"
             ls -la test-results/ || true
-            exit 0
+            exit 1
           fi
           
-          echo "📊 Información del archivo:"
-          echo "   Archivo: test-results/junit.xml"
-          echo "   Tamaño: $(wc -l < test-results/junit.xml) líneas"
-          
-          # 3. Crear nombre único para el ciclo de pruebas
           TIMESTAMP=$(date +'%Y-%m-%d %H:%M')
           TEST_CYCLE_NAME="Playwright Tests - ${{ matrix.env }} - $TIMESTAMP"
-          
-          echo ""
-          echo "🎯 PARÁMETROS PARA ZEPHYR:"
-          echo "   Project Key: '$PROJECT_KEY'"
-          echo "   Test Cycle: '$TEST_CYCLE_NAME'"
-          echo "   Environment: ${{ matrix.env }}"
-          echo "   API URL: $JIRA_BASE_URL/rest/atm/1.0/testrun/import"
-          
-          # 4. Subir a Zephyr Scale
-          echo ""
-          echo "🔄 Enviando a Zephyr Scale..."
           
           response_code=$(curl -s -w "\n%{http_code}" -o /tmp/zephyr_response.json \
             -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
             -H "Content-Type: multipart/form-data" \
             -F "file=@test-results/junit.xml" \
-            -F "projectKey=$PROJECT_KEY" \
+            -F "projectKey=$JIRA_PROJECT_KEY" \
             -F "testCycle=$TEST_CYCLE_NAME" \
             -F "autoCreateTestCases=true" \
             "$JIRA_BASE_URL/rest/atm/1.0/testrun/import")
           
-          # Separar response body del código HTTP
           http_code=$(echo "$response_code" | tail -n1)
           echo "📨 Código HTTP: $http_code"
           
-          # Mostrar respuesta
           if [ -f "/tmp/zephyr_response.json" ]; then
             echo "📄 Respuesta de la API:"
             cat /tmp/zephyr_response.json
-            echo ""
           fi
           
-          # 5. Interpretar respuesta
           case $http_code in
             200|201)
-              echo "✅ ✅ ✅ ÉXITO! Resultados subidos a Zephyr Scale"
-              echo "🔍 Revisa en Jira: $JIRA_BASE_URL"
-              echo "   Proyecto: $PROJECT_KEY"
-              echo "   Test Cycle: $TEST_CYCLE_NAME"
+              echo "✅ ÉXITO! Resultados subidos a Zephyr Scale"
               ;;
             400)
               echo "❌ Bad Request (400)"
-              echo "   Posibles causas:"
-              echo "   • Project Key '$PROJECT_KEY' no existe"
-              echo "   • Formato de archivo JUnit incorrecto"
-              echo "   • Faltan parámetros requeridos"
               ;;
             401)
               echo "❌ Unauthorized (401)"
-              echo "   Credenciales de Jira incorrectas"
               ;;
             403)
               echo "❌ Forbidden (403)"
-              echo "   Usuario no tiene permisos en el proyecto '$PROJECT_KEY'"
               ;;
             404)
-              echo "❌ Not Found (404)"
-              echo "   Posibles causas:"
-              echo "   1. URL incorrecta: $JIRA_BASE_URL/rest/atm/1.0/testrun/import"
-              echo "   2. Zephyr Scale no está instalado en tu Jira"
-              echo "   3. La API ha cambiado"
-              
-              # Probar endpoint alternativo
-              echo ""
-              echo "🔄 Probando endpoint alternativo..."
-              curl -s -w "\nCódigo: %{http_code}\n" \
-                -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
-                -H "Content-Type: multipart/form-data" \
-                -F "file=@test-results/junit.xml" \
-                -F "projectKey=$PROJECT_KEY" \
-                "$JIRA_BASE_URL/rest/tests/1.0/import/junit" || true
+              echo "❌ Not Found (404) - revisa URL y que Zephyr Scale esté instalado"
               ;;
             *)
               echo "❌ Error desconocido (HTTP $http_code)"
               ;;
           esac
-          
-          echo ""
-          echo "🔍 Para más detalles, revisa el paso de DEBUG anterior"
         env:
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
           JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
-          PROJECT_KEY: ${{ secrets.PROJECT_KEY }}
+          JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
