@@ -78,7 +78,7 @@ jobs:
           curl -X POST \
             -u $JIRA_EMAIL:$JIRA_API_TOKEN \
             -H "Content-Type: multipart/form-data" \
-            -F "file=@test-results/results.json" \
+            -F "file=@test-results/junit.xml" \
             "$JIRA_BASE_URL/rest/zephyr/latest/import/execution"
         env:
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
