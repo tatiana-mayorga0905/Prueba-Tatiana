@@ -19,16 +19,18 @@ jobs:
         env: [dev, qa, app]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: lts/*
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright Browsers
+      - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
       - name: Run Playwright tests
@@ -43,7 +45,6 @@ jobs:
 
           APP_USER_EMAIL: ${{ secrets.APP_USER_EMAIL }}
           APP_USER_PASSWORD: ${{ secrets.APP_USER_PASSWORD }}
-
         run: |
           if [ "${{ matrix.env }}" = "dev" ]; then
             npm run test:dev
@@ -53,8 +54,32 @@ jobs:
             npm run test:app
           fi
 
-      - uses: actions/upload-artifact@v4
+      - name: Import results to Xray
         if: always()
+        env:
+          XRAY_CLIENT_ID: ${{ secrets.XRAY_CLIENT_ID }}
+          XRAY_CLIENT_SECRET: ${{ secrets.XRAY_CLIENT_SECRET }}
+          JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
+        run: |
+          echo "Getting Xray token..."
+
+          TOKEN=$(curl -s -H "Content-Type: application/json" \
+            -X POST https://xray.cloud.getxray.app/api/v2/authenticate \
+            -d "{
+              \"client_id\": \"$XRAY_CLIENT_ID\",
+              \"client_secret\": \"$XRAY_CLIENT_SECRET\"
+            }" | tr -d '"')
+
+          echo "Importing JUnit results to Xray..."
+
+          curl -H "Content-Type: text/xml" \
+               -H "Authorization: Bearer $TOKEN" \
+               --data @test-results/junit.xml \
+               "https://xray.cloud.getxray.app/api/v2/import/execution/junit?projectKey=$JIRA_PROJECT_KEY"
+
+      - name: Upload Playwright HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: playwright-report-${{ matrix.env }}
           path: playwright-report/
