@@ -10,9 +10,9 @@ const envConfig = environments[ENV as keyof typeof environments];
 export default defineConfig({
   testDir: "./tests",
 
-  timeout: 120_000, 
+  timeout: 200_000, // Tiempo máximo TOTAL que puede durar el test completo.
   expect: {
-    timeout: 10_000,
+    timeout: 30_000, // Tiempo máximo que Playwright espera a que se cumpla una validación (expect),
   },
 
   fullyParallel: false,

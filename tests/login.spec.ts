@@ -3,15 +3,32 @@ import { LoginPage } from '../pages/LoginPage';
 
 test.describe('Login', () => {
 
-  test('XSP-56 @dev @qa @app login works', async ({ page }) => {
-    const env = process.env.TARGET_ENV || 'dev';
-    const loginPage = new LoginPage(page);
+  test('Login with valid credentials',
+    { tag: ['@dev', '@qa', '@app', '@smoke', '@login'] },
+    
+    async ({ page }, testInfo) => {
 
-    await page.goto('/');
-    await loginPage.login(env);
-    console.log('URL actual:', page.url());
-   
-    await expect(page).not.toHaveURL(/login/);
-    await page.waitForTimeout(3000);
-  });
+      testInfo.annotations.push({
+        type: 'test_key',
+        description: 'XSP-56'
+      });
+
+      const env = process.env.TARGET_ENV || 'dev';
+      const loginPage = new LoginPage(page);
+
+      await test.step('Abrir la aplicación', async () => {
+        await page.goto('/');
+      });
+
+      await test.step('Iniciar login con credenciales válidas', async () => {
+        await loginPage.login(env);
+      });
+
+      await test.step('Validar que el usuario ingresó correctamente', async () => {
+        await expect(page).not.toHaveURL(/login/);
+      });
+
+    }
+  );
+
 });
